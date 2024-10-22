@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kwata Ludo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            text-align: center;
+        }
+
+        header {
+            background: #00796b;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            margin: 20px auto;
+            max-width: 600px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 2px;
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+
+        .cell {
+            background: #e0e0e0;
+            border: 1px solid #b0b0b0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .home {
+            background: #ffcc00;
+            grid-column: span 2;
+            grid-row: span 2;
+        }
+
+        .play-area {
+            grid-column: 2 / span 8;
+            grid-row: 1 / span 9;
+            position: relative;
+        }
+
+        .square {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #p1 { background: red; }
+        #p2 { background: blue; }
+        #p3 { background: green; }
+        #p4 { background: yellow; }
+
+        #rollButton {
+            padding: 10px 20px;
+            background: #00796b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #rollButton:hover {
+            background: #004d40;
+        }
+
+        #restartButton {
+            padding: 10px 20px;
+            background: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        #restartButton:hover {
+            background: #e64a19;
+        }
+
+        #message {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+
+        .color-option {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            margin: 5px;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .color-option.selected {
+            border-color: #000;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            opacity: 1;
+            animation: fall 1s forwards;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(300px);
+                opacity: 0;
+            }
+        }
+
+        #dice {
+            font-size: 2em;
+            margin-top: 20px;
+            display: none; /* Masquer le dé au début */
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Kwata Ludo</h1>
+    </header>
+    <div class="container" id="setup">
+        <h2>Sélectionnez le nombre de joueurs</h2>
+        <select id="playerCount">
+            <option value="2">2 Joueurs</option>
+            <option value="3">3 Joueurs</option>
+            <option value="4" selected>4 Joueurs</option>
+        </select>
+        <h2>Choisissez les couleurs</h2>
+        <div id="colorSelection"></div>
+        <button id="startButton">Démarrer le Jeu</button>
+    </div>
+    <div class="container" id="game" style="display: none;">
+        <div class="board" id="board">
+            <div class="home" id="home1"></div>
+            <div class="home" id="home2"></div>
+            <div class="home" id="home3"></div>
+            <div class="home" id="home4"></div>
+            <div class="play-area" id="play-area">
+                <!-- Création des cases du plateau -->
+                <script>
+                    const board = document.getElementById('board');
+                    for (let i = 0; i < 100; i++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        board.appendChild(cell);
+                    }
+                </script>
+            </div>
+        </div>
+        <button id="rollButton">Lancer le dé</button>
+        <div id="dice">Dé: <span id="diceValue"></span></div> <!-- Affichage du dé -->
+        <div id="message"></div>
+        <button id="restartButton" style="display:none;">Rejouer</button>
+        <div id="statistics" style="display:none;"></div>
+    </div>
+    <audio id="diceSound" src="dice-roll.mp3"></audio>
+    <audio id="winSound" src="win-sound.mp3"></audio>
+    <audio id="captureSound" src="capture-sound.mp3"></audio>
+    <script>
+        const playerCountSelect = document.getElementById('playerCount');
+        const startButton = document.getElementById('startButton');
+        const rollButton = document.getElementById('rollButton');
+        const message = document.getElementById('message');
+        const restartButton = document.getElementById('restartButton');
+        const colorSelection = document.getElementById('colorSelection');
+        const statisticsDiv = document.getElementById('statistics');
+        const diceSound = document.getElementById('diceSound');
+        const winSound = document.getElementById('winSound');
+        const captureSound = document.getElementById('captureSound');
+        const diceValue = document.getElementById('diceValue');
+        const diceDisplay = document.getElementById('dice');
+
+        let players = [];
+        let currentPlayerIndex = 0;
+        let isGameActive = false;
+        let playerStats = {};
+
+        const colors = ['red', 'blue', 'green', 'yellow'];
+
+        startButton.addEventListener('click', () => {
+            const playerCount = parseInt(playerCountSelect.value);
+            setupPlayers(playerCount);
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            isGameActive = true;
+            message.textContent = `C'est le tour de Joueur ${players[currentPlayerIndex].color}`;
+        });
+
+        rollButton.addEventListener('click', () => {
+            if (!isGameActive) return;
+
+            const diceRoll = Math.floor(Math.random() * 6) + 1;
+            diceSound.play();
+            diceValue.textContent = diceRoll; // Afficher la valeur du dé
+            diceDisplay.style.display = 'block'; // Afficher le dé
+            message.textContent = `Joueur ${players[currentPlayerIndex].color} a lancé un ${diceRoll}`;
+
+            const previousPosition = players[currentPlayerIndex].position;
+
+            if (diceRoll === 6 && previousPosition === 0) {
+                players[currentPlayerIndex].position = 1; // Sortir le pion de la maison
+                updatePlayerPosition(currentPlayerIndex);
+                message.textContent += ` - Joueur ${players[currentPlayerIndex].color} sort un pion !`;
+            } else if (previousPosition > 0) {
+                players[currentPlayerIndex].position += diceRoll; // Déplacer le pion
+                updatePlayerPosition(currentPlayerIndex);
+                message.textContent += ` - Joueur ${players[currentPlayerIndex].color} avance !`;
+
+                // Vérifier capture
+                checkCapture(currentPlayerIndex, previousPosition, players[currentPlayerIndex].position);
+            }
+
+            // Vérifier si le joueur a gagné
+            if (players[currentPlayerIndex].position >= 30) {
+                message.textContent = `Joueur ${players[currentPlayerIndex].color} a gagné !`;
+                winSound.play();
+                displayConfetti();
+                updateStatistics(players[currentPlayerIndex].color);
+                isGameActive = false;
+                rollButton.style.display = 'none';
+                restartButton.style.display = 'block';
+                displayStatistics();
+                return;
+            }
+
+            // Changer de joueur
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            message.textContent += ` C'est le tour de Joueur ${players[currentPlayerIndex].color}`;
+        });
+
+        restartButton.addEventListener('click', () => {
+            players.forEach(player => {
+                player.position = 0;
+                player.element.style.transform = 'translate(0, 0)'; // Réinitialiser la position
+            });
+            currentPlayerIndex = 0;
+            isGameActive = true;
+            message.textContent = '';
+            rollButton.style.display = 'block';
+            restartButton.style.display = 'none';
+            statisticsDiv.style.display = 'none';
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            diceDisplay.style.display = 'none'; // Masquer le dé lors de la réinitialisation
+        });
+
+        function setupPlayers(playerCount) {
+            players = [];
+            colorSelection.innerHTML = '';
+            const availableColors = colors.slice(0, playerCount);
+
+            availableColors.forEach((color, index) => {
+                const colorDiv = document.createElement('div');
+                colorDiv.classList.add('color-option');
+                colorDiv.style.backgroundColor = color;
+                colorDiv.addEventListener('click', () => selectColor(colorDiv, index));
+                colorSelection.appendChild(colorDiv);
+
+                players.push({
+                    id: index + 1,
+                    position: 0,
+                    color: color,
+                    element: document.createElement('div')
+                });
+
+                players[index].element.className = `square ${color}`; // Affecter la classe pour la couleur
+                document.querySelector('.play-area').appendChild(players[index].element); // Ajouter à la zone de jeu
+
+                playerStats[color] = 0; // Initialiser les statistiques de victoire
+            });
+        }
+
+        function selectColor(selectedElement, index) {
+            const colorOptions = document.querySelectorAll('.color-option');
+            colorOptions.forEach(option => option.classList.remove('selected'));
+            selectedElement.classList.add('selected');
+        }
+
+        function updatePlayerPosition(playerIndex) {
+            const player = players[playerIndex];
+            const squareSize = 40; // Taille des cases (à ajuster selon votre CSS)
+            const x = (player.position % 10) * squareSize;
+            const y = Math.floor(player.position / 10) * squareSize;
+            player.element.style.transform = `translate(${x}px, ${y}px)`; // Mise à jour de la position du pion
+            player.element.style.backgroundColor = player.color; // Couleur du pion
+        }
+
+        function checkCapture(currentPlayerIndex, previousPosition, newPosition) {
+            players.forEach((player, index) => {
+                if (index !== currentPlayerIndex && player.position === newPosition) {
+                    captureSound.play();
+                    message.textContent += ` - Joueur ${players[currentPlayerIndex].color} capture le pion de Joueur ${player.color}!`;
+                    player.position = 0; // Ramener le pion à la maison
+                    player.element.style.transform = 'translate(0, 0)'; // Réinitialiser la position
+                    updatePlayerPosition(index);
+                }
+            });
+        }
+
+        function displayConfetti() {
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                document.body.appendChild(confetti);
+
+                // Suppression après animation
+                setTimeout(() => {
+                    confetti.remove();
+                }, 1000);
+            }
+        }
+
+        function updateStatistics(winnerColor) {
+            playerStats[winnerColor] += 1; // Incrémenter les victoires
+        }
+
+        function displayStatistics() {
+            statisticsDiv.innerHTML = '<h2>Statistiques de Jeu</h2>';
+            for (const [color, victories] of Object.entries(playerStats)) {
+                statisticsDiv.innerHTML += `<p>Joueur ${color} : ${victories} victoires</p>`;
+            }
+            statisticsDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
